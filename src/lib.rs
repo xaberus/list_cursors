@@ -51,49 +51,72 @@ impl<T> LinkedList<T> {
     pub fn new() -> Self {
         Self::default()
     }
-    /// Provides a cursor to the empty element
-    pub fn cursor(&self, current: StartPosition) -> Cursor<T> {
+
+    /// Provides a cursor with immutable references to elements in the list.
+    /// The cursor starts ether with an empty element before the head or after the tail
+    /// as specified by  the `position` argument.
+    pub fn cursor(&self, position: StartPosition) -> Cursor<T> {
         Cursor {
             list: self,
-            current: match current {
+            current: match position {
                 StartPosition::BeforeHead => Position::BeforeHead,
                 StartPosition::AfterTail => Position::AfterTail,
             },
         }
     }
 
+    /// Provides a cursor with immutable references to elements in the list starting with
+    /// head of the list, i.e. the first valid element or the empty element before the head.
     pub fn head(&self) -> Cursor<T> {
         let mut c = self.cursor(StartPosition::BeforeHead);
-        c.move_next();
+        if c.peek_after().is_some() {
+            c.move_next();
+        }
         c
     }
 
+    /// Provides a cursor with immutable references to elements in the list starting with
+    /// tail of the list, i.e. the last valid element or the empty element after the tail.
     pub fn tail(&self) -> Cursor<T> {
         let mut c = self.cursor(StartPosition::AfterTail);
-        c.move_prev();
+        if c.peek_before().is_some() {
+            c.move_prev();
+        }
         c
     }
 
-    /// Provides a cursor with mutable references and access to the list
-    pub fn cursor_mut(&mut self, current: StartPosition) -> CursorMut<T> {
+    /// Provides a cursor with mutable references to elements and mutable access to the list.
+    /// The cursor starts ether with an empty element before the head or after the tail
+    /// as specified by  the `position` argument.
+    pub fn cursor_mut(&mut self, position: StartPosition) -> CursorMut<T> {
         CursorMut {
             list: self,
-            current: match current {
+            current: match position {
                 StartPosition::BeforeHead => Position::BeforeHead,
                 StartPosition::AfterTail => Position::AfterTail,
             },
         }
     }
 
+    /// Provides a cursor with mutable references to elements and mutable access to the list
+    /// starting with head of the list, i.e. the first valid element or the empty element
+    /// before the head.
     pub fn head_mut(&mut self) -> CursorMut<T> {
         let mut c = self.cursor_mut(StartPosition::BeforeHead);
-        c.move_next();
+        if c.peek_after().is_some() {
+            c.move_next();
+        }
         c
     }
 
+    /// Provides a cursor with mutable references to elements and mutable access to the list
+    /// starting with tail of the list, i.e. the last valid element or the empty element
+    /// after the tail.
     pub fn tail_mut(&mut self) -> CursorMut<T> {
         let mut c = self.cursor_mut(StartPosition::AfterTail);
-        c.move_prev();
+        if c.peek_before().is_some() {
+            c.move_prev();
+        }
         c
     }
 
@@ -214,16 +237,16 @@ impl<T> Position<T> {
     }
 }
 
-/// An Immutable look into a `LinkedList` that can be moved back and forth
+/// An immutable view into a `LinkedList` that can be moved back and forth
 pub struct Cursor<'list, T: 'list> {
     list: &'list LinkedList<T>,
     current: Position<T>,
 }
 
 impl<'list, T> Cursor<'list, T> {
-    /// Return cursor position where None is the empty element before the head,
-    /// `0..list.len()` are valid element positions and `list.len()` is the empty element
-    /// after the tail.
+    /// Return cursor position where `None` is the empty element before the head,
+    /// `Some(0)..Some(list.len())` are valid element positions and `Some(list.len())`
+    /// is the empty element after the tail.
     pub fn pos(&self) -> Option<usize> {
         self.current.pos(self.list)
     }
@@ -273,9 +296,9 @@ pub struct CursorMut<'list, T: 'list> {
 }
 
 impl<'list, T> CursorMut<'list, T> {
-    /// Return cursor position where None is the empty element before the head,
-    /// `0..list.len()` are valid element positions and `list.len()` is the empty element
-    /// after the tail.
+    /// Return cursor position where `None` is the empty element before the head,
+    /// `Some(0)..Some(list.len())` are valid element positions and `Some(list.len())`
+    /// is the empty element after the tail.
     pub fn pos(&self) -> Option<usize> {
         self.current.pos(self.list)
     }
