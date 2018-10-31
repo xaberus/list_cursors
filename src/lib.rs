@@ -1,6 +1,4 @@
-#![allow(dead_code)]
 #![feature(box_into_raw_non_null)]
-#![feature(box_syntax)]
 use std::fmt;
 use std::iter::FromIterator;
 use std::marker::PhantomData;
@@ -127,8 +125,8 @@ impl<T> FromIterator<T> for LinkedList<T> {
         let mut list = LinkedList::new();
         {
             let mut cursor = list.cursor_mut(StartPosition::AfterTail);
-            for item in iter {
-                cursor.insert_before(item);
+            for element in iter {
+                cursor.insert_before(element);
             }
         }
         list
@@ -223,17 +221,21 @@ pub struct Cursor<'list, T: 'list> {
 }
 
 impl<'list, T> Cursor<'list, T> {
-    fn pos(&self) -> Option<usize> {
+    /// Return cursor position where None is the empty element before the head,
+    /// `0..list.len()` are valid element positions and `list.len()` is the empty element
+    /// after the tail.
+    pub fn pos(&self) -> Option<usize> {
         self.current.pos(self.list)
     }
 
     /// Move to the subsequent element of the list if it exists or the empty
-    /// element
+    /// element after the tail.
     pub fn move_next(&mut self) {
         self.current = self.current.next(self.list);
     }
 
-    /// Move to the previous element of the list
+    /// Move to the previous element of the list if it exists or the empty
+    /// element before the head.
     pub fn move_prev(&mut self) {
         self.current = self.current.prev(self.list);
     }
@@ -271,16 +273,21 @@ pub struct CursorMut<'list, T: 'list> {
 }
 
 impl<'list, T> CursorMut<'list, T> {
-    fn pos(&self) -> Option<usize> {
+    /// Return cursor position where None is the empty element before the head,
+    /// `0..list.len()` are valid element positions and `list.len()` is the empty element
+    /// after the tail.
+    pub fn pos(&self) -> Option<usize> {
         self.current.pos(self.list)
     }
 
     /// Move to the subsequent element of the list if it exists or the empty
-    /// element
+    /// element after the tail.
     pub fn move_next(&mut self) {
         self.current = self.current.next(self.list);
     }
-    /// Move to the previous element of the list
+
+    /// Move to the previous element of the list if it exists or the empty
+    /// element before the head.
     pub fn move_prev(&mut self) {
         self.current = self.current.prev(self.list);
     }
@@ -318,13 +325,13 @@ impl<'list, T> CursorMut<'list, T> {
 
     // Now the list editing operations
 
-    unsafe fn raw_insert_item(
+    unsafe fn raw_insert_element(
         &mut self,
-        item: T,
+        element: T,
         prev: Option<NonNull<Node<T>>>,
         next: Option<NonNull<Node<T>>>,
     ) -> NonNull<Node<T>> {
-        let mut node = box Node::new(item);
+        let mut node = Box::new(Node::new(element));
         node.prev = prev;
         node.next = next;
         let node = Box::into_raw_non_null(node);
@@ -359,12 +366,14 @@ impl<'list, T> CursorMut<'list, T> {
         }
     }
 
-    /// Insert `item` after the cursor
-    pub fn insert_after(&mut self, item: T) {
+    /// Insert `element` after the cursor
+    ///
+    /// This function will move the cursor so `peek_after` will point to the new element.
+    pub fn insert_after(&mut self, element: T) {
         let (prev, next) = self.insert_after_links();
 
         unsafe {
-            let node = self.raw_insert_item(item, prev, next);
+            let node = self.raw_insert_element(element, prev, next);
             self.current = match self.current {
                 // <>[1 2] => [<0> 1 2]
                 Position::BeforeHead => Position::Node(0, node),
@@ -381,12 +390,14 @@ impl<'list, T> CursorMut<'list, T> {
         self.move_prev()
     }
 
-    /// Insert `item` before the cursor
-    pub fn insert_before(&mut self, item: T) {
+    /// Insert `element` before the cursor
+    ///
+    /// This function will move the cursor so `peek_before` will point to the new element.
+    pub fn insert_before(&mut self, element: T) {
         let (prev, next) = self.insert_before_links();
 
         unsafe {
-            let node = self.raw_insert_item(item, prev, next);
+            let node = self.raw_insert_element(element, prev, next);
             self.current = match self.current {
                 // <>[1 2] => [<0> 1 2]
                 Position::BeforeHead => Position::Node(0, node),
@@ -423,6 +434,9 @@ impl<'list, T> CursorMut<'list, T> {
     }
 
     /// Insert `list` between the current element and the next
+    ///
+    /// This function will move the cursor so `peek_after` will point to the head of the inserted
+    /// `list`.
     pub fn insert_list_after(&mut self, mut list: LinkedList<T>) {
         let (head, tail, len) = match (list.head.take(), list.tail.take()) {
             (Some(head), Some(tail)) => (head, tail, list.len),
@@ -452,6 +466,9 @@ impl<'list, T> CursorMut<'list, T> {
     }
 
     /// Insert `list` between the previous element and current
+    ///
+    /// This function will move the cursor so `peek_before` will point to the tail of the inserted
+    /// `list`.
     pub fn insert_list_before(&mut self, mut list: LinkedList<T>) {
         let (head, tail, len) = match (list.head.take(), list.tail.take()) {
             (Some(head), Some(tail)) => (head, tail, list.len),
@@ -481,7 +498,10 @@ impl<'list, T> CursorMut<'list, T> {
         self.move_next();
     }
 
-    /// Remove and return the item following the cursor
+    /// Remove and return the element following the cursor
+    ///
+    /// This function will not consume the element pointed to by the cursor. If you want to drain
+    /// the list you should start with an empty element.
     pub fn pop_after(&mut self) -> Option<T> {
         self.current.next(self.list).map(|node| unsafe {
             // <>[0]
@@ -505,7 +525,10 @@ impl<'list, T> CursorMut<'list, T> {
             node.into_element()
         })
     }
-    /// Remove and return the item before the cursor
+    /// Remove and return the element before the cursor
+    ///
+    /// This function will not consume the element pointed to by the cursor. If you want to drain
+    /// the list you should start with an empty element.
     pub fn pop_before(&mut self) -> Option<T> {
         self.current.prev(self.list).map(|node| unsafe {
             // [0]<>
@@ -568,7 +591,7 @@ impl<'list, T> CursorMut<'list, T> {
     }
 
     /// Split the list in two after the current element
-    /// The returned list consists of all elements following but not including
+    /// The returned list consists of all elements following but **not including**
     /// the current one.
     // note: consuming the cursor is not necessary here, but it makes sense
     // given the interface
@@ -587,7 +610,7 @@ impl<'list, T> CursorMut<'list, T> {
     }
 
     /// Split the list in two before the current element
-    /// The returned list consists of all elements following and including
+    /// The returned list consists of all elements following and **including**
     /// the current one.
     pub fn split_before(self) -> LinkedList<T> {
         use std::mem::replace;
