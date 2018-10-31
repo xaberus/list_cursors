@@ -33,7 +33,7 @@ impl<T> Node<T> {
         }
     }
 
-    fn into_element(self: Box<Self>) -> T {
+    fn into_element(self) -> T {
         self.element
     }
 }
@@ -104,7 +104,7 @@ impl<T> LinkedList<T> {
 
 impl<T> Drop for LinkedList<T> {
     fn drop(&mut self) {
-        let mut c = self.head_mut();
+        let mut c = self.cursor_mut(StartPosition::BeforeHead);
         while c.pop_after().is_some() {}
     }
 }
@@ -558,7 +558,7 @@ impl<'list, T> CursorMut<'list, T> {
                     next.as_mut().prev = node.prev
                 }
             }
-            Node::into_element(node)
+            node.into_element()
         })
     }
 
