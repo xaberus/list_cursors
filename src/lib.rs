@@ -187,48 +187,31 @@ impl<T> Position<T> {
         }
     }
 
-    fn next(self, list: &LinkedList<T>) -> Option<NonNull<Node<T>>> {
+    fn next(self, list: &LinkedList<T>) -> Self {
         match self {
-            Position::BeforeHead => list.head,
-            Position::Node(_pos, node) => unsafe { node.as_ref().next },
-            Position::AfterTail => None,
+            Position::BeforeHead => match list.head {
+                Some(next) => Position::Node(0, next),
+                _ => Position::AfterTail,
+            },
+            Position::Node(pos, node) => match unsafe { node.as_ref().next } {
+                Some(next) => Position::Node(pos + 1, next),
+                None => Position::AfterTail,
+            },
+            _ => Position::AfterTail,
         }
     }
 
-    fn prev(self, list: &LinkedList<T>) -> Option<NonNull<Node<T>>> {
+    fn prev(self, list: &LinkedList<T>) -> Self {
         match self {
-            Position::BeforeHead => None,
-            Position::Node(_pos, node) => unsafe { node.as_ref().prev },
-            Position::AfterTail => list.tail,
-        }
-    }
-
-    /// Move to the subsequent element of the list if it exists or the empty
-    /// element
-    pub fn move_next(self, list: &LinkedList<T>) -> Self {
-        match self.next(list) {
-            Some(next) => {
-                if let Position::Node(pos, ..) = self {
-                    Position::Node(pos + 1, next)
-                } else {
-                    Position::Node(0, next)
-                }
-            }
-            None => Position::AfterTail,
-        }
-    }
-
-    /// Move to the previous element of the list
-    pub fn move_prev(self, list: &LinkedList<T>) -> Self {
-        match self.prev(list) {
-            Some(prev) => {
-                if let Position::Node(pos, ..) = self {
-                    Position::Node(pos - 1, prev)
-                } else {
-                    Position::Node(list.len - 1, prev)
-                }
-            }
-            None => Position::BeforeHead,
+            Position::BeforeHead => Position::BeforeHead,
+            Position::Node(pos, node) => match unsafe { node.as_ref().prev } {
+                Some(prev) => Position::Node(pos - 1, prev),
+                None => Position::BeforeHead,
+            },
+            _ => match list.tail {
+                Some(prev) => Position::Node(list.len - 1, prev),
+                _ => Position::BeforeHead,
+            },
         }
     }
 }
@@ -240,14 +223,6 @@ pub struct Cursor<'list, T: 'list> {
 }
 
 impl<'list, T> Cursor<'list, T> {
-    fn next(&self) -> Option<NonNull<Node<T>>> {
-        self.current.next(self.list)
-    }
-
-    fn prev(&self) -> Option<NonNull<Node<T>>> {
-        self.current.prev(self.list)
-    }
-
     fn pos(&self) -> Option<usize> {
         self.current.pos(self.list)
     }
@@ -255,12 +230,12 @@ impl<'list, T> Cursor<'list, T> {
     /// Move to the subsequent element of the list if it exists or the empty
     /// element
     pub fn move_next(&mut self) {
-        self.current = self.current.move_next(self.list);
+        self.current = self.current.next(self.list);
     }
 
     /// Move to the previous element of the list
     pub fn move_prev(&mut self) {
-        self.current = self.current.move_prev(self.list);
+        self.current = self.current.prev(self.list);
     }
 
     /// Get the current element
@@ -274,7 +249,7 @@ impl<'list, T> Cursor<'list, T> {
 
     /// Get the following element
     pub fn peek_after(&self) -> Option<&'list T> {
-        self.next().map(|next_node| unsafe {
+        self.current.next(self.list).map(|next_node| unsafe {
             let next_node = &*next_node.as_ptr();
             &next_node.element
         })
@@ -282,7 +257,7 @@ impl<'list, T> Cursor<'list, T> {
 
     /// Get the previous element
     pub fn peek_before(&self) -> Option<&'list T> {
-        self.prev().map(|prev_node| unsafe {
+        self.current.prev(self.list).map(|prev_node| unsafe {
             let prev_node = &*prev_node.as_ptr();
             &prev_node.element
         })
@@ -296,14 +271,6 @@ pub struct CursorMut<'list, T: 'list> {
 }
 
 impl<'list, T> CursorMut<'list, T> {
-    fn next(&self) -> Option<NonNull<Node<T>>> {
-        self.current.next(self.list)
-    }
-
-    fn prev(&self) -> Option<NonNull<Node<T>>> {
-        self.current.prev(self.list)
-    }
-
     fn pos(&self) -> Option<usize> {
         self.current.pos(self.list)
     }
@@ -311,11 +278,11 @@ impl<'list, T> CursorMut<'list, T> {
     /// Move to the subsequent element of the list if it exists or the empty
     /// element
     pub fn move_next(&mut self) {
-        self.current = self.current.move_next(self.list);
+        self.current = self.current.next(self.list);
     }
     /// Move to the previous element of the list
     pub fn move_prev(&mut self) {
-        self.current = self.current.move_prev(self.list);
+        self.current = self.current.prev(self.list);
     }
 
     /// Get the current element
@@ -328,14 +295,14 @@ impl<'list, T> CursorMut<'list, T> {
     }
     /// Get the next element
     pub fn peek_after(&mut self) -> Option<&mut T> {
-        self.next().map(|next_node| unsafe {
+        self.current.next(self.list).map(|next_node| unsafe {
             let next_node = &mut *next_node.as_ptr();
             &mut next_node.element
         })
     }
     /// Get the previous element
     pub fn peek_before(&self) -> Option<&mut T> {
-        self.prev().map(|prev_node| unsafe {
+        self.current.prev(self.list).map(|prev_node| unsafe {
             let prev_node = &mut *prev_node.as_ptr();
             &mut prev_node.element
         })
@@ -376,7 +343,9 @@ impl<'list, T> CursorMut<'list, T> {
         match self.current {
             Position::BeforeHead => (None, self.list.head),
             Position::AfterTail => (self.list.tail, None),
-            Position::Node(_pos, current) => (Some(current), self.next()),
+            Position::Node(_pos, current) => {
+                (Some(current), self.current.next(self.list).into_node())
+            }
         }
     }
 
@@ -384,7 +353,9 @@ impl<'list, T> CursorMut<'list, T> {
         match self.current {
             Position::BeforeHead => (None, self.list.head),
             Position::AfterTail => (self.list.tail, None),
-            Position::Node(_pos, current) => (self.prev(), Some(current)),
+            Position::Node(_pos, current) => {
+                (self.current.prev(self.list).into_node(), Some(current))
+            }
         }
     }
 
@@ -512,7 +483,7 @@ impl<'list, T> CursorMut<'list, T> {
 
     /// Remove and return the item following the cursor
     pub fn pop_after(&mut self) -> Option<T> {
-        self.next().map(|node| unsafe {
+        self.current.next(self.list).map(|node| unsafe {
             // <>[0]
             // [<0> 1]
             // [0 <1> 2]
@@ -536,7 +507,7 @@ impl<'list, T> CursorMut<'list, T> {
     }
     /// Remove and return the item before the cursor
     pub fn pop_before(&mut self) -> Option<T> {
-        self.prev().map(|node| unsafe {
+        self.current.prev(self.list).map(|node| unsafe {
             // [0]<>
             // [0 <1>]
             // [0 <1> 2]
