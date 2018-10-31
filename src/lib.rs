@@ -179,11 +179,11 @@ impl<T> Position<T> {
         }
     }
 
-    fn pos(self, list: &LinkedList<T>) -> usize {
+    fn pos(self, list: &LinkedList<T>) -> Option<usize> {
         match self {
-            Position::BeforeHead => 0,
-            Position::Node(pos, _node) => pos,
-            Position::AfterTail => list.len,
+            Position::BeforeHead => None,
+            Position::Node(pos, _node) => Some(pos),
+            Position::AfterTail => Some(list.len),
         }
     }
 
@@ -248,7 +248,7 @@ impl<'list, T> Cursor<'list, T> {
         self.current.prev(self.list)
     }
 
-    fn pos(&self) -> usize {
+    fn pos(&self) -> Option<usize> {
         self.current.pos(self.list)
     }
 
@@ -304,7 +304,7 @@ impl<'list, T> CursorMut<'list, T> {
         self.current.prev(self.list)
     }
 
-    fn pos(&self) -> usize {
+    fn pos(&self) -> Option<usize> {
         self.current.pos(self.list)
     }
 
@@ -390,31 +390,45 @@ impl<'list, T> CursorMut<'list, T> {
 
     /// Insert `item` after the cursor
     pub fn insert_after(&mut self, item: T) {
-        self.list.len += 1;
-
         let (prev, next) = self.insert_after_links();
 
         unsafe {
-            self.current = Position::Node(
-                self.current.pos(self.list),
-                self.raw_insert_item(item, prev, next),
-            );
+            let node = self.raw_insert_item(item, prev, next);
+            self.current = match self.current {
+                // <>[1 2] => [<0> 1 2]
+                Position::BeforeHead => Position::Node(0, node),
+                // [1 2]<> => [1 2 <3>]
+                Position::AfterTail => Position::Node(self.list.len, node),
+                // [<1> 2]<> => [1 <3> 2] (pos changes!)
+                Position::Node(pos, ..) => Position::Node(pos + 1, node),
+            };
         }
+
+        // restores invariant, do not move this line
+        self.list.len += 1;
+
         self.move_prev()
     }
 
     /// Insert `item` before the cursor
     pub fn insert_before(&mut self, item: T) {
-        self.list.len += 1;
-
         let (prev, next) = self.insert_before_links();
 
         unsafe {
-            self.current = Position::Node(
-                self.current.pos(self.list),
-                self.raw_insert_item(item, prev, next),
-            );
+            let node = self.raw_insert_item(item, prev, next);
+            self.current = match self.current {
+                // <>[1 2] => [<0> 1 2]
+                Position::BeforeHead => Position::Node(0, node),
+                // [1 2]<> => [1 2 <3>]
+                Position::AfterTail => Position::Node(self.list.len, node),
+                // [<1> 2]<> => [<3> 1 2]
+                Position::Node(pos, ..) => Position::Node(pos, node),
+            };
         }
+
+        // restores invariant, do not move this line
+        self.list.len += 1;
+
         self.move_next();
     }
 
@@ -448,12 +462,21 @@ impl<'list, T> CursorMut<'list, T> {
 
         let (prev, next) = self.insert_after_links();
 
-        self.list.len += len;
-
         unsafe {
             self.raw_insert_list(head, tail, prev, next);
-            self.current = Position::Node(self.current.pos(self.list) + 1, head);
+            self.current = match self.current {
+                // <>[o0 o1] => <>[<n0> n1 o0 o1]
+                Position::BeforeHead => Position::Node(0, head),
+                // [o0 o1]<> => [o0 o1 <n0> n1]
+                Position::AfterTail => Position::Node(self.list.len, head),
+                // [o0 <o1>]<> => [o0 o1 <n0> n1] (pos changes!)
+                Position::Node(pos, ..) => Position::Node(pos + 1, head),
+            };
         }
+
+        // restores invariant, do not move this line
+        self.list.len += len;
+
         self.move_prev();
     }
 
@@ -468,12 +491,22 @@ impl<'list, T> CursorMut<'list, T> {
 
         let (prev, next) = self.insert_before_links();
 
-        self.list.len += list.len;
-
         unsafe {
             self.raw_insert_list(head, tail, prev, next);
-            self.current = Position::Node(self.current.pos(self.list) + len - 1, tail);
+            self.current = match self.current {
+                // <>[o0 o1] => <>[n0 <n1> o0 o1]
+                Position::BeforeHead => Position::Node(len - 1, tail),
+                // [o0 o1]<> => [o0 o1 n0 <n1>]
+                Position::AfterTail => Position::Node(self.list.len + len - 1, tail),
+                // [<o0> o1]<> => [n0 <n1> o0 o1] (pos changes!)
+                // [b0 <o0> a0]<> => [b0 n0 <n1> o0 a0] (pos changes!)
+                Position::Node(pos, ..) => Position::Node(pos + len - 1, tail),
+            };
         }
+
+        // restores invariant, do not move this line
+        self.list.len += list.len;
+
         self.move_next();
     }
 
@@ -1077,15 +1110,15 @@ mod tests {
         let mut list = LinkedList::new();
         {
             let mut c = list.cursor_mut(StartPosition::AfterTail); // []<>
-            assert_eq!(c.pos(), 0);
+            assert_eq!(c.pos(), Some(0));
             c.insert_before(0); // [0]<>
-            assert_eq!(c.pos(), 1);
+            assert_eq!(c.pos(), Some(1));
             assert_eq!(c.peek_before(), Some(&mut 0));
             c.insert_before(1); // [0, 1]<>
-            assert_eq!(c.pos(), 2);
+            assert_eq!(c.pos(), Some(2));
             assert_eq!(c.peek_before(), Some(&mut 1));
             c.insert_before(2); // [0, 1, 2]<>
-            assert_eq!(c.pos(), 3);
+            assert_eq!(c.pos(), Some(3));
             assert_eq!(c.peek_before(), Some(&mut 2));
         }
         cmp_iterator(&list, 0..3);
@@ -1097,13 +1130,13 @@ mod tests {
         {
             let mut c = list.cursor_mut(StartPosition::AfterTail); // []<>
             c.insert_after(0); // <>[0]
-            assert_eq!(c.pos(), 0);
+            assert_eq!(c.pos(), None);
             assert_eq!(c.peek_after(), Some(&mut 0));
             c.insert_after(1); // <>[1, 0]
-            assert_eq!(c.pos(), 0);
+            assert_eq!(c.pos(), None);
             assert_eq!(c.peek_after(), Some(&mut 1));
             c.insert_after(2); // <>[2, 1, 0]
-            assert_eq!(c.pos(), 0);
+            assert_eq!(c.pos(), None);
             assert_eq!(c.peek_after(), Some(&mut 2));
         }
         println!("{:?}", list);
@@ -1116,13 +1149,13 @@ mod tests {
         {
             let mut c = list.cursor_mut(StartPosition::BeforeHead); // <>[]
             c.insert_before(0); // [0]<>
-            assert_eq!(c.pos(), 1);
+            assert_eq!(c.pos(), Some(1));
             assert_eq!(c.peek_before(), Some(&mut 0));
             c.insert_before(1); // [0, 1]<>
-            assert_eq!(c.pos(), 2);
+            assert_eq!(c.pos(), Some(2));
             assert_eq!(c.peek_before(), Some(&mut 1));
             c.insert_before(2); // [0, 1, 2]<>
-            assert_eq!(c.pos(), 3);
+            assert_eq!(c.pos(), Some(3));
             assert_eq!(c.peek_before(), Some(&mut 2));
         }
         println!("{:?}", list);
@@ -1135,13 +1168,13 @@ mod tests {
         {
             let mut c = list.cursor_mut(StartPosition::BeforeHead); // <>[]
             c.insert_after(0); // <>[0]
-            assert_eq!(c.pos(), 0);
+            assert_eq!(c.pos(), None);
             assert_eq!(c.peek_after(), Some(&mut 0));
             c.insert_after(1); // <>[1, 0]
-            assert_eq!(c.pos(), 0);
+            assert_eq!(c.pos(), None);
             assert_eq!(c.peek_after(), Some(&mut 1));
             c.insert_after(2); // <>[2, 1, 0]
-            assert_eq!(c.pos(), 0);
+            assert_eq!(c.pos(), None);
             assert_eq!(c.peek_after(), Some(&mut 2));
         }
         println!("{:?}", list);
@@ -1153,21 +1186,21 @@ mod tests {
         let mut list = LinkedList::new();
         {
             let mut c = list.cursor_mut(StartPosition::BeforeHead); // <>[]
-            assert_eq!(c.pos(), 0);
+            assert_eq!(c.pos(), None);
             c.insert_before(0); // [0]<>
-            assert_eq!(c.pos(), 1);
+            assert_eq!(c.pos(), Some(1));
             assert_eq!(c.peek_before(), Some(&mut 0));
             c.move_next(); // [0]<>
-            assert_eq!(c.pos(), 1);
+            assert_eq!(c.pos(), Some(1));
             assert_eq!(c.peek_before(), Some(&mut 0));
             c.insert_after(2); // [<0>, 2]
-            assert_eq!(c.pos(), 0);
+            assert_eq!(c.pos(), Some(0));
             assert_eq!(c.peek_after(), Some(&mut 2));
             c.move_next(); // [0, <2>]
-            assert_eq!(c.pos(), 1);
+            assert_eq!(c.pos(), Some(1));
             assert_eq!(c.peek_before(), Some(&mut 0));
             c.insert_before(1); // [0, 1, <2>]
-            assert_eq!(c.pos(), 2);
+            assert_eq!(c.pos(), Some(2));
             assert_eq!(c.peek_before(), Some(&mut 1));
         }
         cmp_iterator(&list, 0..3);
@@ -1181,7 +1214,7 @@ mod tests {
             let ins = LinkedList::from_iter(0..0);
             assert_eq!(ins.len, 0);
             c.insert_list_after(ins);
-            assert_eq!(c.pos(), 2);
+            assert_eq!(c.pos(), Some(2));
         }
         assert_eq!(list.len, 3);
         println!("{:?}", list);
@@ -1196,7 +1229,7 @@ mod tests {
             let ins = LinkedList::from_iter(3..6);
             assert_eq!(ins.len, 3);
             c.insert_list_after(ins);
-            assert_eq!(c.pos(), 2);
+            assert_eq!(c.pos(), Some(2));
             assert_eq!(c.peek_after(), Some(&mut 3));
         }
         assert_eq!(list.len, 6);
@@ -1210,7 +1243,7 @@ mod tests {
             let ins = LinkedList::from_iter(6..9);
             assert_eq!(ins.len, 3);
             c.insert_list_after(ins);
-            assert_eq!(c.pos(), 2);
+            assert_eq!(c.pos(), Some(2));
             assert_eq!(c.peek_after(), Some(&mut 6));
         }
         assert_eq!(list.len, 9);
@@ -1226,7 +1259,7 @@ mod tests {
             let ins = LinkedList::from_iter(0..3); // [0 1 2]
             assert_eq!(ins.len, 3);
             c.insert_list_before(ins); // [0 1 2 <3> 4 5]
-            assert_eq!(c.pos(), 3);
+            assert_eq!(c.pos(), Some(3));
             assert_eq!(c.peek_before(), Some(&mut 2));
         }
         assert_eq!(list.len, 6);
@@ -1241,7 +1274,7 @@ mod tests {
             let ins = LinkedList::from_iter(6..9); // [6 7 8]
             assert_eq!(ins.len, 3);
             c.insert_list_before(ins); // [0 1 2 6 7 8 <3> 4 5]
-            assert_eq!(c.pos(), 6);
+            assert_eq!(c.pos(), Some(6));
             assert_eq!(c.peek_before(), Some(&mut 8));
         }
         assert_eq!(list.len, 9);
@@ -1250,58 +1283,58 @@ mod tests {
     }
 
     #[test]
-    fn current_len() {
+    fn current_pos() {
         let mut list: LinkedList<usize> = LinkedList::from_iter(0..3);
         println!("{:?}", list);
         cmp_iterator(&list, 0..3);
 
         {
             let mut c = list.head_mut(); // [<0>, 1, 2]
-            assert_eq!(c.pos(), 0);
+            assert_eq!(c.pos(), Some(0));
             c.move_next(); // [0, <1>, 2]
-            assert_eq!(c.pos(), 1);
+            assert_eq!(c.pos(), Some(1));
             c.move_next(); // [0, 1, <2>]
-            assert_eq!(c.pos(), 2);
+            assert_eq!(c.pos(), Some(2));
             c.move_next(); // [0, 1, 2]<>
-            assert_eq!(c.pos(), 3);
+            assert_eq!(c.pos(), Some(3));
             c.move_prev(); // [0, 1, <2>]
-            assert_eq!(c.pos(), 2);
+            assert_eq!(c.pos(), Some(2));
             c.move_prev(); // [0, <1>, 2]
-            assert_eq!(c.pos(), 1);
+            assert_eq!(c.pos(), Some(1));
             c.move_prev(); // [<0>, 1, 2]
-            assert_eq!(c.pos(), 0);
+            assert_eq!(c.pos(), Some(0));
             c.move_prev(); // <>[0, 1, 2]
-            assert_eq!(c.pos(), 0);
+            assert_eq!(c.pos(), None);
             c.move_next(); // [<0>, 1, 2]
-            assert_eq!(c.pos(), 0);
+            assert_eq!(c.pos(), Some(0));
         }
 
         {
             let mut c = list.cursor_mut(StartPosition::BeforeHead);
-            assert_eq!(c.pos(), 0);
+            assert_eq!(c.pos(), None);
             c.move_next();
-            assert_eq!(c.pos(), 0);
+            assert_eq!(c.pos(), Some(0));
             c.move_next();
-            assert_eq!(c.pos(), 1);
+            assert_eq!(c.pos(), Some(1));
             c.move_next();
-            assert_eq!(c.pos(), 2);
+            assert_eq!(c.pos(), Some(2));
             c.move_next();
-            assert_eq!(c.pos(), 3);
+            assert_eq!(c.pos(), Some(3));
             c.move_next();
-            assert_eq!(c.pos(), 3);
+            assert_eq!(c.pos(), Some(3));
         }
 
         {
             let mut c = list.cursor_mut(StartPosition::AfterTail);
-            assert_eq!(c.pos(), 3);
+            assert_eq!(c.pos(), Some(3));
             c.move_prev();
-            assert_eq!(c.pos(), 2);
+            assert_eq!(c.pos(), Some(2));
             c.move_prev();
-            assert_eq!(c.pos(), 1);
+            assert_eq!(c.pos(), Some(1));
             c.move_prev();
-            assert_eq!(c.pos(), 0);
+            assert_eq!(c.pos(), Some(0));
             c.move_prev();
-            assert_eq!(c.pos(), 0);
+            assert_eq!(c.pos(), None);
         }
     }
 
