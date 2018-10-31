@@ -1219,6 +1219,93 @@ mod tests {
         assert_eq!(list.len, 3);
         println!("{:?}", list);
         cmp_iterator(&list, 0..3);
+
+        let mut list: LinkedList<usize> = LinkedList::from_iter(0..3);
+        {
+            let mut c = list.head_mut();
+            let ins = LinkedList::from_iter(0..0);
+            assert_eq!(ins.len, 0);
+            c.insert_list_after(ins);
+            assert_eq!(c.pos(), Some(0));
+        }
+        assert_eq!(list.len, 3);
+        println!("{:?}", list);
+        cmp_iterator(&list, 0..3);
+
+        let mut list: LinkedList<usize> = LinkedList::from_iter(0..3);
+        {
+            let mut c = list.tail_mut();
+            let ins = LinkedList::from_iter(0..0);
+            assert_eq!(ins.len, 0);
+            c.insert_list_before(ins);
+            assert_eq!(c.pos(), Some(2));
+        }
+        assert_eq!(list.len, 3);
+        println!("{:?}", list);
+        cmp_iterator(&list, 0..3);
+
+        let mut list: LinkedList<usize> = LinkedList::from_iter(0..3);
+        {
+            let mut c = list.head_mut();
+            let ins = LinkedList::from_iter(0..0);
+            assert_eq!(ins.len, 0);
+            c.insert_list_before(ins);
+            assert_eq!(c.pos(), Some(0));
+        }
+        assert_eq!(list.len, 3);
+        println!("{:?}", list);
+        cmp_iterator(&list, 0..3);
+    }
+
+    #[test]
+    fn insert_list_into_empty() {
+        let mut list: LinkedList<usize> = LinkedList::from_iter(0..0);
+        {
+            let mut c = list.tail_mut();
+            let ins = LinkedList::from_iter(0..3);
+            assert_eq!(ins.len, 3);
+            c.insert_list_after(ins);
+            assert_eq!(c.pos(), None);
+        }
+        assert_eq!(list.len, 3);
+        println!("{:?}", list);
+        cmp_iterator(&list, 0..3);
+
+        let mut list: LinkedList<usize> = LinkedList::from_iter(0..0);
+        {
+            let mut c = list.head_mut();
+            let ins = LinkedList::from_iter(0..3);
+            assert_eq!(ins.len, 3);
+            c.insert_list_after(ins);
+            assert_eq!(c.pos(), None);
+        }
+        assert_eq!(list.len, 3);
+        println!("{:?}", list);
+        cmp_iterator(&list, 0..3);
+
+        let mut list: LinkedList<usize> = LinkedList::from_iter(0..0);
+        {
+            let mut c = list.tail_mut();
+            let ins = LinkedList::from_iter(0..3);
+            assert_eq!(ins.len, 3);
+            c.insert_list_before(ins);
+            assert_eq!(c.pos(), Some(3));
+        }
+        assert_eq!(list.len, 3);
+        println!("{:?}", list);
+        cmp_iterator(&list, 0..3);
+
+        let mut list: LinkedList<usize> = LinkedList::from_iter(0..0);
+        {
+            let mut c = list.head_mut();
+            let ins = LinkedList::from_iter(0..3);
+            assert_eq!(ins.len, 3);
+            c.insert_list_before(ins);
+            assert_eq!(c.pos(), Some(3));
+        }
+        assert_eq!(list.len, 3);
+        println!("{:?}", list);
+        cmp_iterator(&list, 0..3);
     }
 
     #[test]
