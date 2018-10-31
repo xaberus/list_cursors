@@ -740,18 +740,18 @@ mod tests {
     
         test cases:
             [F] cursor before head:
-                current = None, end = BeforeHead
+                current = BeforeHead
             [B] cursor after tail:
-                current = None, end = AfterTail
+                current = AfterTail
             [H] cursor has no prev:
-                current = [Node:0], end = None
+                current = [Node:0]
             [T] cursor has no next:
-                current = [Node:2], end = None
+                current = [Node:2]
             [G] general case:
-                current = [Node:1], end = None
+                current = [Node:1]
     
             [S] single element, neither prev nor next
-                current = [Node:0], end = None
+                current = [Node:0]
     
     */
 
@@ -1085,10 +1085,10 @@ mod tests {
             c.insert_before(0); // [0]<>
             assert_eq!(c.pos(), Some(1));
             assert_eq!(c.peek_before(), Some(&mut 0));
-            c.insert_before(1); // [0, 1]<>
+            c.insert_before(1); // [0 1]<>
             assert_eq!(c.pos(), Some(2));
             assert_eq!(c.peek_before(), Some(&mut 1));
-            c.insert_before(2); // [0, 1, 2]<>
+            c.insert_before(2); // [0 1 2]<>
             assert_eq!(c.pos(), Some(3));
             assert_eq!(c.peek_before(), Some(&mut 2));
         }
@@ -1103,10 +1103,10 @@ mod tests {
             c.insert_after(0); // <>[0]
             assert_eq!(c.pos(), None);
             assert_eq!(c.peek_after(), Some(&mut 0));
-            c.insert_after(1); // <>[1, 0]
+            c.insert_after(1); // <>[1 0]
             assert_eq!(c.pos(), None);
             assert_eq!(c.peek_after(), Some(&mut 1));
-            c.insert_after(2); // <>[2, 1, 0]
+            c.insert_after(2); // <>[2 1 0]
             assert_eq!(c.pos(), None);
             assert_eq!(c.peek_after(), Some(&mut 2));
         }
@@ -1122,10 +1122,10 @@ mod tests {
             c.insert_before(0); // [0]<>
             assert_eq!(c.pos(), Some(1));
             assert_eq!(c.peek_before(), Some(&mut 0));
-            c.insert_before(1); // [0, 1]<>
+            c.insert_before(1); // [0 1]<>
             assert_eq!(c.pos(), Some(2));
             assert_eq!(c.peek_before(), Some(&mut 1));
-            c.insert_before(2); // [0, 1, 2]<>
+            c.insert_before(2); // [0 1 2]<>
             assert_eq!(c.pos(), Some(3));
             assert_eq!(c.peek_before(), Some(&mut 2));
         }
@@ -1141,10 +1141,10 @@ mod tests {
             c.insert_after(0); // <>[0]
             assert_eq!(c.pos(), None);
             assert_eq!(c.peek_after(), Some(&mut 0));
-            c.insert_after(1); // <>[1, 0]
+            c.insert_after(1); // <>[1 0]
             assert_eq!(c.pos(), None);
             assert_eq!(c.peek_after(), Some(&mut 1));
-            c.insert_after(2); // <>[2, 1, 0]
+            c.insert_after(2); // <>[2 1 0]
             assert_eq!(c.pos(), None);
             assert_eq!(c.peek_after(), Some(&mut 2));
         }
@@ -1164,13 +1164,13 @@ mod tests {
             c.move_next(); // [0]<>
             assert_eq!(c.pos(), Some(1));
             assert_eq!(c.peek_before(), Some(&mut 0));
-            c.insert_after(2); // [<0>, 2]
+            c.insert_after(2); // [<0> 2]
             assert_eq!(c.pos(), Some(0));
             assert_eq!(c.peek_after(), Some(&mut 2));
-            c.move_next(); // [0, <2>]
+            c.move_next(); // [0 <2>]
             assert_eq!(c.pos(), Some(1));
             assert_eq!(c.peek_before(), Some(&mut 0));
-            c.insert_before(1); // [0, 1, <2>]
+            c.insert_before(1); // [0 1 <2>]
             assert_eq!(c.pos(), Some(2));
             assert_eq!(c.peek_before(), Some(&mut 1));
         }
@@ -1347,23 +1347,23 @@ mod tests {
         cmp_iterator(&list, 0..3);
 
         {
-            let mut c = list.head_mut(); // [<0>, 1, 2]
+            let mut c = list.head_mut(); // [<0> 1 2]
             assert_eq!(c.pos(), Some(0));
-            c.move_next(); // [0, <1>, 2]
+            c.move_next(); // [0 <1> 2]
             assert_eq!(c.pos(), Some(1));
-            c.move_next(); // [0, 1, <2>]
+            c.move_next(); // [0 1 <2>]
             assert_eq!(c.pos(), Some(2));
-            c.move_next(); // [0, 1, 2]<>
+            c.move_next(); // [0 1 2]<>
             assert_eq!(c.pos(), Some(3));
-            c.move_prev(); // [0, 1, <2>]
+            c.move_prev(); // [0 1 <2>]
             assert_eq!(c.pos(), Some(2));
-            c.move_prev(); // [0, <1>, 2]
+            c.move_prev(); // [0 <1> 2]
             assert_eq!(c.pos(), Some(1));
-            c.move_prev(); // [<0>, 1, 2]
+            c.move_prev(); // [<0> 1 2]
             assert_eq!(c.pos(), Some(0));
-            c.move_prev(); // <>[0, 1, 2]
+            c.move_prev(); // <>[0 1 2]
             assert_eq!(c.pos(), None);
-            c.move_next(); // [<0>, 1, 2]
+            c.move_next(); // [<0> 1 2]
             assert_eq!(c.pos(), Some(0));
         }
 
