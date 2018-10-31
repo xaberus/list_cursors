@@ -135,7 +135,7 @@ impl<T> FromIterator<T> for LinkedList<T> {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Copy, Clone)]
 pub enum StartPosition {
     BeforeHead,
     AfterTail,
