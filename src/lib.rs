@@ -235,6 +235,24 @@ impl<T> Position<T> {
             },
         }
     }
+
+    fn item_and_next(self, list: &LinkedList<T>) -> (Option<NonNull<Node<T>>>, Self) {
+        let mut current = self;
+        if let Position::BeforeHead = current {
+            current = current.next(list);
+        }
+        let item = current.into_node();
+        (item, current.next(list))
+    }
+
+    fn item_and_prev(self, list: &LinkedList<T>) -> (Option<NonNull<Node<T>>>, Self) {
+        let mut current = self;
+        if let Position::AfterTail = current {
+            current = current.prev(list);
+        }
+        let item = current.into_node();
+        (item, current.prev(list))
+    }
 }
 
 /// An immutable view into a `LinkedList` that can be moved back and forth
@@ -249,6 +267,31 @@ impl<'list, T> Cursor<'list, T> {
     /// is the empty element after the tail.
     pub fn pos(&self) -> Option<usize> {
         self.current.pos(self.list)
+    }
+
+    /// Move to the subsequent element of the list if it exists or the empty
+    /// element after the tail. Returns the element the cursor pointed to last.
+    #[allow(clippy::should_implement_trait)]
+    pub fn next(&mut self) -> Option<&'list T> {
+        let (node, next) = self.current.item_and_next(self.list);
+        self.current = next;
+        node.map(|node| unsafe {
+            // Need an unbound lifetime to get 'list
+            let node = &*node.as_ptr();
+            &node.element
+        })
+    }
+
+    /// Move to the previous element of the list if it exists or the empty
+    /// element before the head. Returns the element the cursor pointed to last.
+    pub fn prev(&mut self) -> Option<&'list T> {
+        let (node, prev) = self.current.item_and_prev(self.list);
+        self.current = prev;
+        node.map(|node| unsafe {
+            // Need an unbound lifetime to get 'list
+            let node = &*node.as_ptr();
+            &node.element
+        })
     }
 
     /// Move to the subsequent element of the list if it exists or the empty
@@ -301,6 +344,31 @@ impl<'list, T> CursorMut<'list, T> {
     /// is the empty element after the tail.
     pub fn pos(&self) -> Option<usize> {
         self.current.pos(self.list)
+    }
+
+    /// Move to the subsequent element of the list if it exists or the empty
+    /// element after the tail. Returns the element the cursor pointed to last.
+    #[allow(clippy::should_implement_trait)]
+    pub fn next(&mut self) -> Option<&mut T> {
+        let (node, next) = self.current.item_and_next(self.list);
+        self.current = next;
+        node.map(|node| unsafe {
+            // Need an unbound lifetime to get same lifetime as self
+            let node = &mut *node.as_ptr();
+            &mut node.element
+        })
+    }
+
+    /// Move to the previous element of the list if it exists or the empty
+    /// element before the head. Returns the element the cursor pointed to last.
+    pub fn prev(&mut self) -> Option<&mut T> {
+        let (node, prev) = self.current.item_and_prev(self.list);
+        self.current = prev;
+        node.map(|node| unsafe {
+            // Need an unbound lifetime to get same lifetime as self
+            let node = &mut *node.as_ptr();
+            &mut node.element
+        })
     }
 
     /// Move to the subsequent element of the list if it exists or the empty
